@@ -4,6 +4,9 @@ Django settings for whatsapp_clone project.
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -13,10 +16,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY')
+# It's recommended to set a strong, unique key in your environment for production.
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-!q2z2y+!&b-7v@p)24x&%8m!_3*t$@#s)w&b(v)x+l@r#p@#$!')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+# For local development, it's safe to set DEBUG to True.
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = []
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
@@ -81,17 +86,26 @@ DATABASES = {
 }
 
 # Channels configuration
-# Channels configuration for Render
-REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+# Use Redis for production (Render) and in-memory for development
+REDIS_URL = os.environ.get('REDIS_URL')
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [REDIS_URL],
+if REDIS_URL:
+    # Production configuration with Redis
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [REDIS_URL],
+            },
         },
-    },
-}
+    }
+else:
+    # Development configuration with in-memory backend
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 
 
 # Password validation
