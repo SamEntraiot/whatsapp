@@ -1,0 +1,26 @@
+services:
+  # A Redis instance for our Django Channels message broker
+  - name: redis
+    type: redis
+    ipAllowList: [] # Allow all IPs to connect
+
+  # The Web Service for our Django application
+  - name: whatsapp-clone
+    type: web
+    runtime: python
+    plan: free # Use Render's free tier
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+      python manage.py migrate
+    startCommand: daphne -b 0.0.0.0 -p $PORT whatsapp_clone.asgi:application
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.13
+      - key: SECRET_KEY
+        generateValue: true # Render will automatically generate a secure key
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis
+          property: connectionString
