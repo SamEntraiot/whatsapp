@@ -1,3 +1,21 @@
+<!-- Mobile Navigation -->
+<div class="mobile-nav">
+    <div class="back-btn" onclick="closeMobileChat()">
+        <i class="fas fa-arrow-left"></i>
+    </div>
+    <div class="chat-title">
+        {% for participant in conversation.participants.all %}
+            {% if participant != current_user %}
+                {{ participant.username }}
+            {% endif %}
+        {% endfor %}
+    </div>
+    <div class="chat-actions">
+        <!-- Actions removed -->
+    </div>
+</div>
+
+<!-- Desktop Chat Header -->
 <div class="chat-header">
     <div class="chat-header-info">
         <div class="chat-header-avatar">
@@ -21,6 +39,10 @@
                 Online
             </div>
         </div>
+    </div>
+    <div class="chat-actions">
+        <i class="fas fa-search" title="Search"></i>
+        <i class="fas fa-ellipsis-v" title="Menu"></i>
     </div>
 </div>
 

@@ -2,18 +2,7 @@
 
 {% block title %}Chats - WhatsApp{% endblock %}
 
-{% block extra_css %}
-<style>
-    .message-status i {
-        color: #8696a0; /* Default color for sent tick */
-        font-size: 12px;
-        margin-left: 5px;
-    }
-    .message-status i.read {
-        color: #53bdeb; /* Blue color for read tick */
-    }
-</style>
-{% endblock %}
+{% block extra_css %}{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -139,6 +128,30 @@ let isTyping = false;
 let currentConversationId = null;
 const currentUser = '{{ current_user.username|escapejs }}';
 
+// --- MOBILE DETECTION AND UTILITIES --- //
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function closeMobileChat() {
+    if (isMobile()) {
+        const sidebar = document.querySelector('.sidebar');
+        const chatMain = document.getElementById('chat-main');
+        
+        sidebar.classList.remove('hidden');
+        chatMain.classList.remove('active');
+        
+        currentConversationId = null;
+        document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
+        
+        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+            chatSocket.close();
+        }
+        
+        history.pushState({}, "", "/");
+    }
+}
+
 // --- CHAT LOADING AND HISTORY --- //
 async function openChat(conversationId, pushState = true) {
     if (currentConversationId === conversationId) return;
@@ -157,7 +170,7 @@ async function openChat(conversationId, pushState = true) {
         document.getElementById('chat-main').innerHTML = chatContent;
 
         if (pushState) {
-            history.pushState({ conversationId: conversationId }, "", `/chat/${conversationId}/`);
+            history.pushState({ conversationId: conversationId }, "", `/?chat=${conversationId}`);
         }
 
         document.querySelectorAll('.chat-item').forEach(item => {
@@ -167,8 +180,24 @@ async function openChat(conversationId, pushState = true) {
             }
         });
 
+        // Mobile-specific behavior
+        if (isMobile()) {
+            const sidebar = document.querySelector('.sidebar');
+            const chatMain = document.getElementById('chat-main');
+            
+            sidebar.classList.add('hidden');
+            chatMain.classList.add('active');
+        }
+
         initializeWebSocket(conversationId);
-        document.getElementById('messageInput').focus();
+        
+        // Focus input only on desktop to prevent mobile keyboard issues
+        if (!isMobile()) {
+            setTimeout(() => {
+                const messageInput = document.getElementById('messageInput');
+                if (messageInput) messageInput.focus();
+            }, 100);
+        }
 
         // After messages are loaded, mark them as read
         setTimeout(() => {
@@ -178,6 +207,7 @@ async function openChat(conversationId, pushState = true) {
                 if (messageId) unreadMessageIds.push(messageId);
             });
 
+            console.log('Found unread messages:', unreadMessageIds);
             if (unreadMessageIds.length > 0) {
                 markMessagesAsRead(conversationId, unreadMessageIds);
             }
@@ -192,12 +222,54 @@ window.addEventListener('popstate', function(event) {
     if (event.state && event.state.conversationId) {
         openChat(event.state.conversationId, false);
     } else {
-        document.getElementById('chat-main').innerHTML = document.getElementById('chat-placeholder').innerHTML;
-        currentConversationId = null;
-        document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
+        if (isMobile()) {
+            closeMobileChat();
+        } else {
+            document.getElementById('chat-main').innerHTML = document.getElementById('chat-placeholder').innerHTML;
+            currentConversationId = null;
+            document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
+        }
         history.replaceState({}, "", "/");
     }
 });
+
+// Handle window resize
+window.addEventListener('resize', function() {
+    // If switching from mobile to desktop while in a chat
+    if (!isMobile() && currentConversationId) {
+        const sidebar = document.querySelector('.sidebar');
+        const chatMain = document.getElementById('chat-main');
+        
+        sidebar.classList.remove('hidden');
+        chatMain.classList.remove('active');
+    }
+});
+
+// Touch event handlers for better mobile experience
+let touchStartY = 0;
+let touchStartX = 0;
+
+document.addEventListener('touchstart', function(e) {
+    touchStartY = e.touches[0].clientY;
+    touchStartX = e.touches[0].clientX;
+}, { passive: true });
+
+document.addEventListener('touchmove', function(e) {
+    if (!isMobile()) return;
+    
+    const touchY = e.touches[0].clientY;
+    const touchX = e.touches[0].clientX;
+    const diffY = touchStartY - touchY;
+    const diffX = touchStartX - touchX;
+    
+    // Prevent pull-to-refresh on chat area
+    if (e.target.closest('.messages-container') && diffY < 0) {
+        const messagesContainer = e.target.closest('.messages-container');
+        if (messagesContainer.scrollTop === 0) {
+            e.preventDefault();
+        }
+    }
+}, { passive: false });
 
 // --- CHAT LIST & INITIALIZATION --- //
 function loadChatList() {
@@ -227,9 +299,11 @@ function loadChatList() {
                 chatList.appendChild(chatItem);
             });
 
-            const pathParts = window.location.pathname.split('/');
-            if (pathParts[1] === 'chat' && pathParts[2]) {
-                const initialConversationId = parseInt(pathParts[2]);
+            // Check for chat parameter in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const chatId = urlParams.get('chat');
+            if (chatId) {
+                const initialConversationId = parseInt(chatId);
                 if (!isNaN(initialConversationId)) {
                     openChat(initialConversationId, false);
                 }
@@ -295,6 +369,7 @@ function displayMessage(message) {
     let statusIcon = '';
     if (message.sender === currentUser) {
         statusIcon = `<i class="fas fa-check-double ${message.is_read ? 'read' : ''}"></i>`;
+        console.log(`Message ${message.id} from ${message.sender} - is_read: ${message.is_read}`);
     }
 
     messageDiv.innerHTML = `
@@ -370,6 +445,7 @@ function autoResize(textarea) {
 }
 
 function markMessagesAsRead(conversationId, messageIds) {
+    console.log('Marking messages as read:', conversationId, messageIds);
     fetch('/api/messages/mark-as-read/', {
         method: 'POST',
         headers: {
@@ -383,6 +459,7 @@ function markMessagesAsRead(conversationId, messageIds) {
     })
     .then(response => response.json())
     .then(data => {
+        console.log('Mark as read response:', data);
         if (data.status !== 'success') {
             console.error('Failed to mark messages as read');
         }
@@ -391,17 +468,18 @@ function markMessagesAsRead(conversationId, messageIds) {
 }
 
 function handleMessagesRead(data) {
-    if (data.sender_username !== currentUser) {
-        data.message_ids.forEach(messageId => {
-            const messageDiv = document.querySelector(`.message[data-message-id='${messageId}']`);
-            if (messageDiv) {
-                const icon = messageDiv.querySelector('.message-status i');
-                if (icon) {
-                    icon.classList.add('read');
-                }
+    console.log('Messages read event received:', data);
+    // Update read status for messages sent by current user that were read by others
+    data.message_ids.forEach(messageId => {
+        const messageDiv = document.querySelector(`.message[data-message-id='${messageId}']`);
+        if (messageDiv && messageDiv.classList.contains('sent')) {
+            const icon = messageDiv.querySelector('.message-status i');
+            if (icon) {
+                icon.classList.add('read');
+                console.log('Added read class to message:', messageId);
             }
-        });
-    }
+        }
+    });
 }
 
 function escapeHtml(text) {

@@ -33,9 +33,8 @@ ALLOWED_HOSTS.extend(["127.0.0.1", "localhost"])
 CSRF_TRUSTED_ORIGINS = []
 if RENDER_EXTERNAL_HOSTNAME:
     CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
-# Add the specific Render URL as backup
+# Add local development URLs
 CSRF_TRUSTED_ORIGINS.extend([
-    'https://whatsapp-clone-2qss.onrender.com',
     'http://127.0.0.1:8000',
     'http://localhost:8000'
 ])
@@ -57,6 +56,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # For static files in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

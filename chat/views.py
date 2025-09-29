@@ -1,10 +1,10 @@
+import json
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
-from django.db.models import Q
 from .models import Conversation, Message
 
 
@@ -54,13 +54,6 @@ def chat_list(request):
 
 
 @login_required
-def chat_room(request, conversation_id):
-    # This view now just redirects to the main list view.
-    # The new SPA logic will handle opening the correct chat.
-    return redirect('chat_list')
-
-
-@login_required
 def start_conversation(request):
     if request.method == 'POST':
         user_id = request.POST.get('user_id')
@@ -72,13 +65,13 @@ def start_conversation(request):
         ).filter(participants=other_user).first()
         
         if existing_conversation:
-            return redirect('chat_room', conversation_id=existing_conversation.id)
+            return redirect(f'/?chat={existing_conversation.id}')
         
         # Create new conversation
         conversation = Conversation.objects.create()
         conversation.participants.add(request.user, other_user)
         
-        return redirect('chat_room', conversation_id=conversation.id)
+        return redirect(f'/?chat={conversation.id}')
     
     return redirect('chat_list')
 
@@ -99,7 +92,6 @@ def chat_room_content(request, conversation_id):
 def mark_messages_as_read(request):
     if request.method == 'POST':
         try:
-            import json
             data = json.loads(request.body)
             message_ids = data.get('message_ids', [])
             conversation_id = data.get('conversation_id')
